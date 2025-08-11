@@ -9,16 +9,23 @@ import { Dialog, DialogContent } from "@/components/ui/dialog"
 import { useToast } from "@/hooks/use-toast"
 import { supabase } from "@/lib/supabase-client"
 
-interface OtpVerificationModalProps {
+interface OTPVerificationModalProps {
   isOpen: boolean
   onClose: () => void
   email: string
-  onVerified: () => void
+  onVerificationSuccess: () => void
+  onEditEmail: () => void
 }
 
 type VerificationState = "idle" | "loading" | "success" | "error" | "rate_limited"
 
-export function OtpVerificationModal({ isOpen, onClose, email, onVerified }: OtpVerificationModalProps) {
+export function OTPVerificationModal({
+  isOpen,
+  onClose,
+  email,
+  onVerificationSuccess,
+  onEditEmail,
+}: OTPVerificationModalProps) {
   const [otp, setOtp] = useState<string[]>(new Array(6).fill(""))
   const [activeIndex, setActiveIndex] = useState(0)
   const [verificationState, setVerificationState] = useState<VerificationState>("idle")
@@ -146,7 +153,7 @@ export function OtpVerificationModal({ isOpen, onClose, email, onVerified }: Otp
         })
 
         setTimeout(() => {
-          onVerified()
+          onVerificationSuccess()
         }, 1500)
         return
       }
@@ -173,7 +180,7 @@ export function OtpVerificationModal({ isOpen, onClose, email, onVerified }: Otp
       })
 
       setTimeout(() => {
-        onVerified()
+        onVerificationSuccess()
       }, 1500)
     } catch (error: any) {
       console.error("OTP verification error:", error)
@@ -408,8 +415,8 @@ export function OtpVerificationModal({ isOpen, onClose, email, onVerified }: Otp
                 )}
               </Button>
 
-              <Button variant="link" onClick={onClose} className="text-gray-600 hover:text-gray-800">
-                Cancel
+              <Button variant="link" onClick={onEditEmail} className="text-gray-600 hover:text-gray-800">
+                Edit Email Address
               </Button>
             </div>
           </div>

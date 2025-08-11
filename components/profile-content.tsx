@@ -1,113 +1,181 @@
 "use client"
 
-import { useState } from "react"
-import { ArrowLeft, User, Calendar, Settings, HelpCircle, Building, Shield } from "lucide-react"
+import { useState, useEffect } from "react"
+import { ArrowLeft, Save } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { ProfileSidebar } from "./profile/profile-sidebar"
+import { PersonalInfoSection } from "./profile/personal-info-section"
+import { AccountSettingsSection } from "./profile/account-settings-section"
+import { BookingHistorySection } from "./profile/booking-history-section"
+import { PreferencesSection } from "./profile/preferences-section"
+import { HelpSupportSection } from "./profile/help-support-section"
+import { MyFacilitySection } from "./profile/my-facility-section"
+import { PlatformSettingsSection } from "./profile/platform-settings-section"
+import { RoleSelectionModal } from "./profile/role-selection-modal"
 import { useAuth } from "@/contexts/auth-context"
 import { useRouter } from "next/navigation"
-import { PersonalInfoSection } from "@/components/profile/personal-info-section"
-import { BookingHistorySection } from "@/components/profile/booking-history-section"
-import { PreferencesSection } from "@/components/profile/preferences-section"
-import { HelpSupportSection } from "@/components/profile/help-support-section"
-import { MyFacilitySection } from "@/components/profile/my-facility-section"
-import { PlatformSettingsSection } from "@/components/profile/platform-settings-section"
+import { useToast } from "@/hooks/use-toast"
 
-export function ProfileContent() {
-  const { user } = useAuth()
+interface ProfileContentProps {
+  initialSection?: string
+}
+
+export function ProfileContent({ initialSection = "personal-info" }: ProfileContentProps) {
+  const [activeSection, setActiveSection] = useState(initialSection)
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
+  const [showRoleSelection, setShowRoleSelection] = useState(false)
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
+  const { user, profile, updateProfile } = useAuth()
   const router = useRouter()
-  const [activeTab, setActiveTab] = useState("personal")
+  const { toast } = useToast()
 
-  const userRole = user?.user_metadata?.role || "sports-enthusiast"
+  // Update active section when initialSection changes
+  useEffect(() => {
+    setActiveSection(initialSection)
+  }, [initialSection])
 
-  const tabs = [
-    { id: "personal", label: "Personal Info", icon: User },
-    { id: "bookings", label: "Booking History", icon: Calendar },
-    { id: "preferences", label: "Preferences", icon: Settings },
-    { id: "help", label: "Help & Support", icon: HelpCircle },
-    ...(userRole === "facility-owner" ? [{ id: "facility", label: "My Facility", icon: Building }] : []),
-    ...(userRole === "admin" ? [{ id: "platform", label: "Platform Settings", icon: Shield }] : []),
-  ]
+  // Check if user needs to select a role
+  useEffect(() => {
+    if (user && !profile?.role && !user.user_metadata?.role) {
+      setShowRoleSelection(true)
+    }
+  }, [user, profile])
+
+  const handleSave = async () => {
+    setIsSaving(true)
+    try {
+      // Simulate save operation
+      await new Promise((resolve) => setTimeout(resolve, 1000))
+      setHasUnsavedChanges(false)
+      toast({
+        title: "Changes Saved",
+        description: "Your profile has been updated successfully.",
+      })
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to save changes. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const handleRoleSelection = async (selectedRole: string) => {
+    try {
+      const { error } = await updateProfile({ role: selectedRole })
+      if (error) {
+        throw error
+      }
+      setShowRoleSelection(false)
+      toast({
+        title: "Role Selected",
+        description: `You are now registered as a ${selectedRole.replace("-", " ")}`,
+      })
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update role",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const renderActiveSection = () => {
+    switch (activeSection) {
+      case "personal-info":
+        return <PersonalInfoSection onDataChange={() => setHasUnsavedChanges(true)} />
+      case "account-settings":
+        return <AccountSettingsSection onDataChange={() => setHasUnsavedChanges(true)} />
+      case "booking-history":
+        return <BookingHistorySection />
+      case "preferences":
+        return <PreferencesSection onDataChange={() => setHasUnsavedChanges(true)} />
+      case "help-support":
+        return <HelpSupportSection />
+      case "my-facility":
+        return <MyFacilitySection />
+      case "platform-settings":
+        return <PlatformSettingsSection onDataChange={() => setHasUnsavedChanges(true)} />
+      default:
+        return <PersonalInfoSection onDataChange={() => setHasUnsavedChanges(true)} />
+    }
+  }
+
+  if (!user) {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-gray-900 mb-4">Please sign in to access your profile</h1>
+        </div>
+      </div>
+    )
+  }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      {/* Header */}
-      <div className="mb-8">
-        <Button variant="ghost" onClick={() => router.push("/")} className="mb-4 text-blue-600 hover:text-blue-700">
-          <ArrowLeft className="h-4 w-4 mr-2" />
-          Back to Home
-        </Button>
+    <>
+      <div className="min-h-screen bg-gray-50">
+        {/* Header */}
+        <div className="bg-white border-b sticky top-16 z-40">
+          <div className="container mx-auto px-4 py-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <Button variant="ghost" size="icon" onClick={() => router.back()}>
+                  <ArrowLeft className="h-4 w-4" />
+                </Button>
+                <h1 className="text-2xl font-bold text-gray-900">Profile & Settings</h1>
+                {/* Mobile menu toggle */}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="lg:hidden"
+                  onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+                >
+                  Menu
+                </Button>
+              </div>
+              {hasUnsavedChanges && (
+                <Button onClick={handleSave} disabled={isSaving} className="bg-blue-600 hover:bg-blue-700">
+                  <Save className="h-4 w-4 mr-2" />
+                  {isSaving ? "Saving..." : "Save Changes"}
+                </Button>
+              )}
+            </div>
+          </div>
+        </div>
 
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Profile Settings</h1>
-          <p className="text-gray-600 mt-2">Manage your account settings and preferences</p>
+        {/* Content */}
+        <div className="container mx-auto px-4 py-8">
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+            {/* Sidebar - Hidden on mobile unless menu is open */}
+            <div className={`lg:col-span-1 ${isMobileMenuOpen ? "block" : "hidden lg:block"}`}>
+              <ProfileSidebar
+                activeSection={activeSection}
+                onSectionChange={(section) => {
+                  setActiveSection(section)
+                  setIsMobileMenuOpen(false) // Close mobile menu when section is selected
+                  // Update URL without page reload
+                  const url = new URL(window.location.href)
+                  url.searchParams.set("section", section)
+                  window.history.replaceState({}, "", url.toString())
+                }}
+              />
+            </div>
+
+            {/* Main Content */}
+            <div className="lg:col-span-3">{renderActiveSection()}</div>
+          </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-        {/* Sidebar */}
-        <div className="lg:col-span-1">
-          <Card>
-            <CardHeader className="pb-4">
-              <CardTitle className="text-lg">Settings</CardTitle>
-              <CardDescription>Choose a section to manage</CardDescription>
-            </CardHeader>
-            <CardContent className="p-0">
-              <Tabs value={activeTab} onValueChange={setActiveTab} orientation="vertical" className="w-full">
-                <TabsList className="grid w-full grid-rows-6 h-auto bg-transparent p-1">
-                  {tabs.map((tab) => {
-                    const Icon = tab.icon
-                    return (
-                      <TabsTrigger
-                        key={tab.id}
-                        value={tab.id}
-                        className="w-full justify-start px-4 py-3 data-[state=active]:bg-blue-50 data-[state=active]:text-blue-700 data-[state=active]:border-r-2 data-[state=active]:border-blue-600"
-                      >
-                        <Icon className="h-4 w-4 mr-3" />
-                        {tab.label}
-                      </TabsTrigger>
-                    )
-                  })}
-                </TabsList>
-              </Tabs>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Main Content */}
-        <div className="lg:col-span-3">
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-            <TabsContent value="personal" className="mt-0">
-              <PersonalInfoSection />
-            </TabsContent>
-
-            <TabsContent value="bookings" className="mt-0">
-              <BookingHistorySection />
-            </TabsContent>
-
-            <TabsContent value="preferences" className="mt-0">
-              <PreferencesSection />
-            </TabsContent>
-
-            <TabsContent value="help" className="mt-0">
-              <HelpSupportSection />
-            </TabsContent>
-
-            {userRole === "facility-owner" && (
-              <TabsContent value="facility" className="mt-0">
-                <MyFacilitySection />
-              </TabsContent>
-            )}
-
-            {userRole === "admin" && (
-              <TabsContent value="platform" className="mt-0">
-                <PlatformSettingsSection />
-              </TabsContent>
-            )}
-          </Tabs>
-        </div>
-      </div>
-    </div>
+      {/* Role Selection Modal */}
+      <RoleSelectionModal
+        isOpen={showRoleSelection}
+        onRoleSelect={handleRoleSelection}
+        onClose={() => setShowRoleSelection(false)}
+      />
+    </>
   )
 }

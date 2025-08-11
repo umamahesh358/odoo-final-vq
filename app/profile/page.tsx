@@ -1,10 +1,9 @@
 "use client"
 
-import { useAuth } from "@/contexts/auth-context"
-import { useRouter } from "next/navigation"
 import { useEffect } from "react"
-import { Header } from "@/components/header"
+import { useRouter } from "next/navigation"
 import { ProfileContent } from "@/components/profile-content"
+import { useAuth } from "@/contexts/auth-context"
 
 export default function ProfilePage() {
   const { user, loading } = useAuth()
@@ -18,11 +17,8 @@ export default function ProfilePage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50">
-        <Header />
-        <div className="flex items-center justify-center h-96">
-          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
-        </div>
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
       </div>
     )
   }
@@ -31,10 +27,5 @@ export default function ProfilePage() {
     return null
   }
 
-  return (
-    <div className="min-h-screen bg-gray-50">
-      <Header />
-      <ProfileContent />
-    </div>
-  )
+  return <ProfileContent />
 }

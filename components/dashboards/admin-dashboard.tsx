@@ -33,10 +33,10 @@ interface RecentUser {
 export function AdminDashboard() {
   const { user, profile } = useAuth()
   const [stats, setStats] = useState<AdminStats>({
-    totalUsers: 1250,
-    activeFacilities: 45,
-    dailyBookings: 156,
-    platformRevenue: 240000,
+    totalUsers: 0,
+    activeFacilities: 0,
+    dailyBookings: 0,
+    platformRevenue: 0,
   })
   const [pendingFacilities, setPendingFacilities] = useState<PendingFacility[]>([])
   const [recentUsers, setRecentUsers] = useState<RecentUser[]>([])
@@ -50,7 +50,14 @@ export function AdminDashboard() {
 
   const fetchAdminData = async () => {
     try {
-      // Mock data for pending facilities
+      // Mock data for admin dashboard
+      setStats({
+        totalUsers: 1250,
+        activeFacilities: 45,
+        dailyBookings: 156,
+        platformRevenue: 240000,
+      })
+
       setPendingFacilities([
         {
           id: "1",
@@ -68,7 +75,6 @@ export function AdminDashboard() {
         },
       ])
 
-      // Mock data for recent users
       setRecentUsers([
         {
           id: "1",
@@ -108,10 +114,6 @@ export function AdminDashboard() {
       default:
         return "bg-green-100 text-green-800"
     }
-  }
-
-  const handleApproveFacility = (facilityId: string) => {
-    setPendingFacilities((prev) => prev.filter((f) => f.id !== facilityId))
   }
 
   if (loading) {
@@ -232,7 +234,7 @@ export function AdminDashboard() {
             <div className="space-y-4">
               {pendingFacilities.length > 0 ? (
                 pendingFacilities.map((facility) => (
-                  <div key={facility.id} className="border rounded-lg p-4 hover:bg-gray-50 transition-colors">
+                  <div key={facility.id} className="border rounded-lg p-4">
                     <div className="flex items-center justify-between mb-2">
                       <h3 className="font-semibold text-gray-900">{facility.name}</h3>
                       <Badge variant="outline" className="text-orange-600 border-orange-600">
@@ -243,11 +245,7 @@ export function AdminDashboard() {
                     <p className="text-sm text-gray-600 mb-3">Owner: {facility.owner}</p>
                     <p className="text-xs text-gray-500 mb-3">Submitted {facility.submitted}</p>
                     <div className="flex gap-2">
-                      <Button
-                        size="sm"
-                        className="bg-green-600 hover:bg-green-700"
-                        onClick={() => handleApproveFacility(facility.id)}
-                      >
+                      <Button size="sm" className="bg-green-600 hover:bg-green-700">
                         Approve
                       </Button>
                       <Button size="sm" variant="outline">
@@ -271,19 +269,16 @@ export function AdminDashboard() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <UserCheck className="h-5 w-5" />
-              User Activity
+              Recent User Activity
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
               {recentUsers.map((user) => (
-                <div
-                  key={user.id}
-                  className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 transition-colors"
-                >
+                <div key={user.id} className="flex items-center justify-between p-4 border rounded-lg">
                   <div className="flex items-center gap-4">
-                    <div className="bg-blue-100 p-2 rounded-full">
-                      <Users className="h-4 w-4 text-blue-600" />
+                    <div className="bg-gray-100 p-2 rounded-full">
+                      <Users className="h-4 w-4 text-gray-600" />
                     </div>
                     <div>
                       <p className="font-medium text-gray-900">{user.name}</p>

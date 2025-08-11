@@ -26,10 +26,10 @@ interface RecentBooking {
 export function OwnerDashboard() {
   const { user, profile } = useAuth()
   const [stats, setStats] = useState<OwnerStats>({
-    todayRevenue: 2400,
-    activeBookings: 8,
-    courtOccupancy: 78,
-    monthlyGrowth: 15,
+    todayRevenue: 0,
+    activeBookings: 0,
+    courtOccupancy: 0,
+    monthlyGrowth: 0,
   })
   const [recentBookings, setRecentBookings] = useState<RecentBooking[]>([])
   const [loading, setLoading] = useState(true)
@@ -42,7 +42,14 @@ export function OwnerDashboard() {
 
   const fetchOwnerData = async () => {
     try {
-      // Mock data for recent bookings
+      // Mock data for now - in real app, would fetch from owner's venues
+      setStats({
+        todayRevenue: 2400,
+        activeBookings: 8,
+        courtOccupancy: 78,
+        monthlyGrowth: 15,
+      })
+
       setRecentBookings([
         {
           id: "1",
@@ -67,14 +74,6 @@ export function OwnerDashboard() {
           time: "6:00 PM",
           status: "confirmed",
           amount: 1000,
-        },
-        {
-          id: "4",
-          customer_name: "Sarah Wilson",
-          court: "Court A",
-          time: "8:00 PM",
-          status: "confirmed",
-          amount: 800,
         },
       ])
     } catch (error) {
@@ -211,13 +210,10 @@ export function OwnerDashboard() {
           <CardContent>
             <div className="space-y-4">
               {recentBookings.map((booking) => (
-                <div
-                  key={booking.id}
-                  className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 transition-colors"
-                >
+                <div key={booking.id} className="flex items-center justify-between p-4 border rounded-lg">
                   <div className="flex items-center gap-4">
-                    <div className="bg-blue-100 p-2 rounded-full">
-                      <Users className="h-4 w-4 text-blue-600" />
+                    <div className="bg-gray-100 p-2 rounded-full">
+                      <Users className="h-4 w-4 text-gray-600" />
                     </div>
                     <div>
                       <p className="font-medium text-gray-900">{booking.customer_name}</p>
@@ -247,7 +243,7 @@ export function OwnerDashboard() {
             <div className="h-64 flex items-center justify-center bg-gray-50 rounded-lg">
               <div className="text-center">
                 <BarChart3 className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                <p className="text-gray-500 font-medium">Chart Integration Placeholder</p>
+                <p className="text-gray-500">Chart integration placeholder</p>
                 <p className="text-sm text-gray-400">Weekly booking trends would be displayed here</p>
               </div>
             </div>

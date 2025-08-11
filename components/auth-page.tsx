@@ -2,382 +2,652 @@
 
 import type React from "react"
 
-import { useState } from "react"
-import { Eye, EyeOff, Mail, Lock, User, Phone, ArrowLeft } from "lucide-react"
+import { useState, useEffect } from "react"
+import { Eye, EyeOff, Mail, Lock, User, Camera, CheckCircle, XCircle, AlertCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { OTPVerificationModal } from "./otp-verification-modal"
 import { useAuth } from "@/contexts/auth-context"
 import { useRouter } from "next/navigation"
-import { OtpVerificationModal } from "@/components/otp-verification-modal"
-import { RoleSelectionModal } from "@/components/profile/role-selection-modal"
+import { useToast } from "@/hooks/use-toast"
+
+interface FormData {
+  email: string
+  password: string
+  fullName: string
+  role: string
+  avatar: File | null
+  rememberMe: boolean
+  agreeToTerms: boolean
+}
+
+interface FormErrors {
+  email?: string
+  password?: string
+  fullName?: string
+  role?: string
+  agreeToTerms?: string
+}
 
 export function AuthPage() {
-  const { signIn, signUp, loading } = useAuth()
-  const router = useRouter()
+  const [activeTab, setActiveTab] = useState("signin")
   const [showPassword, setShowPassword] = useState(false)
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
-  const [showOtpModal, setShowOtpModal] = useState(false)
-  const [showRoleModal, setShowRoleModal] = useState(false)
-  const [pendingUserData, setPendingUserData] = useState<any>(null)
-
-  // Sign In Form
-  const [signInData, setSignInData] = useState({
+  const [isLoading, setIsLoading] = useState(false)
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null)
+  const [passwordStrength, setPasswordStrength] = useState(0)
+  const [showOTPModal, setShowOTPModal] = useState(false)
+  const [pendingEmail, setPendingEmail] = useState("")
+  const [formData, setFormData] = useState<FormData>({
     email: "",
     password: "",
-  })
-
-  // Sign Up Form
-  const [signUpData, setSignUpData] = useState({
     fullName: "",
-    email: "",
-    phone: "",
-    password: "",
-    confirmPassword: "",
+    role: "",
+    avatar: null,
+    rememberMe: false,
+    agreeToTerms: false,
   })
+  const [errors, setErrors] = useState<FormErrors>({})
 
-  const [errors, setErrors] = useState<Record<string, string>>({})
+  const { signIn, signUp, user } = useAuth()
+  const router = useRouter()
+  const { toast } = useToast()
 
-  const validateSignIn = () => {
-    const newErrors: Record<string, string> = {}
-
-    if (!signInData.email) {
-      newErrors.email = "Email is required"
-    } else if (!/\S+@\S+\.\S+/.test(signInData.email)) {
-      newErrors.email = "Email is invalid"
+  // Redirect if already authenticated
+  useEffect(() => {
+    if (user) {
+      console.log("User already authenticated, redirecting to home")
+      router.push("/")
     }
+  }, [user, router])
 
-    if (!signInData.password) {
-      newErrors.password = "Password is required"
-    }
-
-    setErrors(newErrors)
-    return Object.keys(newErrors).length === 0
+  // Email validation
+  const validateEmail = (email: string) => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    return emailRegex.test(email)
   }
 
-  const validateSignUp = () => {
-    const newErrors: Record<string, string> = {}
+  // Password strength calculation
+  const calculatePasswordStrength = (password: string) => {
+    let strength = 0
+    if (password.length >= 8) strength += 25
+    if (/[a-z]/.test(password)) strength += 25
+    if (/[A-Z]/.test(password)) strength += 25
+    if (/[0-9]/.test(password) && /[^A-Za-z0-9]/.test(password)) strength += 25
+    return strength
+  }
 
-    if (!signUpData.fullName) {
-      newErrors.fullName = "Full name is required"
+  // Real-time validation
+  useEffect(() => {
+    const newErrors: FormErrors = {}
+
+    if (formData.email && !validateEmail(formData.email)) {
+      newErrors.email = "Please enter a valid email address"
     }
 
-    if (!signUpData.email) {
-      newErrors.email = "Email is required"
-    } else if (!/\S+@\S+\.\S+/.test(signUpData.email)) {
-      newErrors.email = "Email is invalid"
-    }
+    if (activeTab === "signup") {
+      if (formData.fullName && formData.fullName.length < 2) {
+        newErrors.fullName = "Full name must be at least 2 characters"
+      }
 
-    if (!signUpData.password) {
-      newErrors.password = "Password is required"
-    } else if (signUpData.password.length < 6) {
-      newErrors.password = "Password must be at least 6 characters"
-    }
+      if (formData.password) {
+        const strength = calculatePasswordStrength(formData.password)
+        setPasswordStrength(strength)
+        if (strength < 50) {
+          newErrors.password = "Password should be stronger"
+        }
+      }
 
-    if (!signUpData.confirmPassword) {
-      newErrors.confirmPassword = "Please confirm your password"
-    } else if (signUpData.password !== signUpData.confirmPassword) {
-      newErrors.confirmPassword = "Passwords do not match"
+      if (formData.role === "") {
+        newErrors.role = "Please select your role"
+      }
     }
 
     setErrors(newErrors)
-    return Object.keys(newErrors).length === 0
+  }, [formData, activeTab])
+
+  const handleInputChange = (field: keyof FormData, value: string | boolean | File | null) => {
+    setFormData((prev) => ({ ...prev, [field]: value }))
+  }
+
+  const handleAvatarUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (file) {
+      handleInputChange("avatar", file)
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        setAvatarPreview(e.target?.result as string)
+      }
+      reader.readAsDataURL(file)
+    }
   }
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!validateSignIn()) return
+
+    console.log("Sign in form submitted")
+
+    if (!formData.email || !formData.password) {
+      toast({
+        title: "Error",
+        description: "Please fill in all required fields",
+        variant: "destructive",
+      })
+      return
+    }
+
+    if (errors.email) {
+      toast({
+        title: "Error",
+        description: "Please enter a valid email address",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setIsLoading(true)
 
     try {
-      await signIn(signInData.email, signInData.password)
-      router.push("/dashboard")
+      console.log("Calling signIn function...")
+      const { error, data } = await signIn(formData.email, formData.password)
+
+      if (error) {
+        console.error("Sign in failed:", error)
+        toast({
+          title: "Sign In Failed",
+          description: error.message || "Invalid email or password",
+          variant: "destructive",
+        })
+      } else {
+        console.log("Sign in successful:", data?.user?.email)
+        toast({
+          title: "Welcome back!",
+          description: "You have successfully signed in.",
+        })
+        // The useEffect will handle the redirect when user state updates
+      }
     } catch (error: any) {
-      setErrors({ general: error.message || "Failed to sign in" })
+      console.error("Sign in error:", error)
+      toast({
+        title: "Error",
+        description: "An unexpected error occurred",
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoading(false)
     }
   }
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!validateSignUp()) return
 
-    try {
-      setPendingUserData(signUpData)
-      setShowOtpModal(true)
-    } catch (error: any) {
-      setErrors({ general: error.message || "Failed to sign up" })
-    }
-  }
+    console.log("Sign up form submitted")
 
-  const handleOtpVerified = async () => {
-    try {
-      await signUp(pendingUserData.email, pendingUserData.password, {
-        full_name: pendingUserData.fullName,
-        phone: pendingUserData.phone,
+    // Validation
+    if (!formData.email || !formData.password || !formData.fullName || !formData.role) {
+      toast({
+        title: "Error",
+        description: "Please fill in all required fields",
+        variant: "destructive",
       })
-      setShowOtpModal(false)
-      setShowRoleModal(true)
+      return
+    }
+
+    if (!formData.agreeToTerms) {
+      toast({
+        title: "Error",
+        description: "Please agree to the Terms & Privacy Policy",
+        variant: "destructive",
+      })
+      return
+    }
+
+    if (Object.keys(errors).length > 0) {
+      toast({
+        title: "Error",
+        description: "Please fix the form errors before submitting",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setIsLoading(true)
+
+    try {
+      console.log("Calling signUp function...")
+      const { error, data } = await signUp(formData.email, formData.password, {
+        fullName: formData.fullName,
+        role: formData.role,
+      })
+
+      if (error) {
+        console.error("Sign up failed:", error)
+        toast({
+          title: "Sign Up Failed",
+          description: error.message || "Failed to create account",
+          variant: "destructive",
+        })
+      } else {
+        console.log("Sign up successful, showing OTP modal")
+        // Show OTP modal for email verification
+        setPendingEmail(formData.email)
+        setShowOTPModal(true)
+        toast({
+          title: "Account Created!",
+          description: "Please check your email for a verification code.",
+        })
+      }
     } catch (error: any) {
-      setErrors({ general: error.message || "Failed to create account" })
+      console.error("Sign up error:", error)
+      toast({
+        title: "Error",
+        description: "An unexpected error occurred",
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoading(false)
     }
   }
 
-  const handleRoleSelected = () => {
-    setShowRoleModal(false)
-    router.push("/dashboard")
+  const handleOTPVerificationSuccess = () => {
+    console.log("OTP verification successful")
+    toast({
+      title: "Welcome to QuickCourt!",
+      description: "Your account has been verified successfully.",
+    })
+    setShowOTPModal(false)
+    router.push("/")
+  }
+
+  const handleEditEmail = () => {
+    console.log("Edit email requested")
+    setShowOTPModal(false)
+    setActiveTab("signup")
+    // Focus on email input after a short delay
+    setTimeout(() => {
+      const emailInput = document.getElementById("signup-email")
+      emailInput?.focus()
+    }, 100)
+  }
+
+  const getPasswordStrengthColor = () => {
+    if (passwordStrength < 25) return "bg-red-500"
+    if (passwordStrength < 50) return "bg-orange-500"
+    if (passwordStrength < 75) return "bg-yellow-500"
+    return "bg-green-500"
+  }
+
+  const getPasswordStrengthText = () => {
+    if (passwordStrength < 25) return "Weak"
+    if (passwordStrength < 50) return "Fair"
+    if (passwordStrength < 75) return "Good"
+    return "Strong"
+  }
+
+  // Don't render if user is already authenticated
+  if (user) {
+    return null
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-blue-100 flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
-        {/* Back Button */}
-        <Button variant="ghost" onClick={() => router.push("/")} className="mb-4 text-blue-600 hover:text-blue-700">
-          <ArrowLeft className="h-4 w-4 mr-2" />
-          Back to Home
-        </Button>
-
-        <Card className="shadow-xl border-0">
-          <CardHeader className="text-center pb-4">
-            <div className="mx-auto mb-4 h-12 w-12 rounded-xl bg-gradient-to-br from-blue-600 to-blue-700 flex items-center justify-center">
-              <span className="text-white font-bold text-lg">QC</span>
+    <>
+      <div className="min-h-screen flex">
+        {/* Left Panel - Branding */}
+        <div className="hidden lg:flex lg:w-2/5 bg-gradient-to-br from-blue-600 via-blue-700 to-green-600 relative overflow-hidden">
+          <div className="absolute inset-0 bg-black/20" />
+          <div className="relative z-10 flex flex-col justify-center items-center text-white p-12">
+            <div className="text-center mb-8">
+              <h1 className="text-4xl font-bold mb-4">QuickCourt</h1>
+              <p className="text-xl mb-2">Book Sports Venues Instantly</p>
+              <p className="text-blue-100 text-lg">
+                Connect with local sports facilities and book your favorite courts in seconds
+              </p>
             </div>
-            <CardTitle className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-blue-700 bg-clip-text text-transparent">
-              Welcome to QuickCourt
-            </CardTitle>
-            <CardDescription>Book your favorite sports venues instantly</CardDescription>
-          </CardHeader>
 
-          <CardContent>
-            <Tabs defaultValue="signin" className="w-full">
-              <TabsList className="grid w-full grid-cols-2 mb-6">
-                <TabsTrigger value="signin" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white">
-                  Sign In
-                </TabsTrigger>
-                <TabsTrigger value="signup" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white">
-                  Sign Up
-                </TabsTrigger>
-              </TabsList>
-
-              {/* Sign In Tab */}
-              <TabsContent value="signin">
-                <form onSubmit={handleSignIn} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="signin-email">Email</Label>
-                    <div className="relative">
-                      <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                      <Input
-                        id="signin-email"
-                        type="email"
-                        placeholder="Enter your email"
-                        value={signInData.email}
-                        onChange={(e) => setSignInData({ ...signInData, email: e.target.value })}
-                        className="pl-10"
-                      />
-                    </div>
-                    {errors.email && <p className="text-sm text-red-600">{errors.email}</p>}
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="signin-password">Password</Label>
-                    <div className="relative">
-                      <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                      <Input
-                        id="signin-password"
-                        type={showPassword ? "text" : "password"}
-                        placeholder="Enter your password"
-                        value={signInData.password}
-                        onChange={(e) => setSignInData({ ...signInData, password: e.target.value })}
-                        className="pl-10 pr-10"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                      >
-                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                      </button>
-                    </div>
-                    {errors.password && <p className="text-sm text-red-600">{errors.password}</p>}
-                  </div>
-
-                  {errors.general && (
-                    <div className="p-3 bg-red-50 border border-red-200 rounded-md">
-                      <p className="text-sm text-red-600">{errors.general}</p>
-                    </div>
-                  )}
-
-                  <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-700" disabled={loading}>
-                    {loading ? "Signing In..." : "Sign In"}
-                  </Button>
-
-                  <div className="text-center">
-                    <Button variant="link" className="text-blue-600 hover:text-blue-700">
-                      Forgot your password?
-                    </Button>
-                  </div>
-                </form>
-              </TabsContent>
-
-              {/* Sign Up Tab */}
-              <TabsContent value="signup">
-                <form onSubmit={handleSignUp} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="signup-name">Full Name</Label>
-                    <div className="relative">
-                      <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                      <Input
-                        id="signup-name"
-                        type="text"
-                        placeholder="Enter your full name"
-                        value={signUpData.fullName}
-                        onChange={(e) => setSignUpData({ ...signUpData, fullName: e.target.value })}
-                        className="pl-10"
-                      />
-                    </div>
-                    {errors.fullName && <p className="text-sm text-red-600">{errors.fullName}</p>}
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="signup-email">Email</Label>
-                    <div className="relative">
-                      <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                      <Input
-                        id="signup-email"
-                        type="email"
-                        placeholder="Enter your email"
-                        value={signUpData.email}
-                        onChange={(e) => setSignUpData({ ...signUpData, email: e.target.value })}
-                        className="pl-10"
-                      />
-                    </div>
-                    {errors.email && <p className="text-sm text-red-600">{errors.email}</p>}
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="signup-phone">Phone Number (Optional)</Label>
-                    <div className="relative">
-                      <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                      <Input
-                        id="signup-phone"
-                        type="tel"
-                        placeholder="Enter your phone number"
-                        value={signUpData.phone}
-                        onChange={(e) => setSignUpData({ ...signUpData, phone: e.target.value })}
-                        className="pl-10"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="signup-password">Password</Label>
-                    <div className="relative">
-                      <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                      <Input
-                        id="signup-password"
-                        type={showPassword ? "text" : "password"}
-                        placeholder="Create a password"
-                        value={signUpData.password}
-                        onChange={(e) => setSignUpData({ ...signUpData, password: e.target.value })}
-                        className="pl-10 pr-10"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                      >
-                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                      </button>
-                    </div>
-                    {errors.password && <p className="text-sm text-red-600">{errors.password}</p>}
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="signup-confirm-password">Confirm Password</Label>
-                    <div className="relative">
-                      <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                      <Input
-                        id="signup-confirm-password"
-                        type={showConfirmPassword ? "text" : "password"}
-                        placeholder="Confirm your password"
-                        value={signUpData.confirmPassword}
-                        onChange={(e) => setSignUpData({ ...signUpData, confirmPassword: e.target.value })}
-                        className="pl-10 pr-10"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                        className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                      >
-                        {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                      </button>
-                    </div>
-                    {errors.confirmPassword && <p className="text-sm text-red-600">{errors.confirmPassword}</p>}
-                  </div>
-
-                  {errors.general && (
-                    <div className="p-3 bg-red-50 border border-red-200 rounded-md">
-                      <p className="text-sm text-red-600">{errors.general}</p>
-                    </div>
-                  )}
-
-                  <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-700" disabled={loading}>
-                    {loading ? "Creating Account..." : "Create Account"}
-                  </Button>
-
-                  <div className="text-center text-sm text-gray-600">
-                    By signing up, you agree to our{" "}
-                    <Button variant="link" className="p-0 h-auto text-blue-600 hover:text-blue-700">
-                      Terms of Service
-                    </Button>{" "}
-                    and{" "}
-                    <Button variant="link" className="p-0 h-auto text-blue-600 hover:text-blue-700">
-                      Privacy Policy
-                    </Button>
-                  </div>
-                </form>
-              </TabsContent>
-            </Tabs>
-          </CardContent>
-        </Card>
-
-        {/* Benefits Section */}
-        <div className="mt-8 text-center">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Why Choose QuickCourt?</h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="bg-white p-4 rounded-lg shadow-sm">
-              <div className="text-blue-600 mb-2">⚡</div>
-              <h4 className="font-medium text-gray-900">Instant Booking</h4>
-              <p className="text-sm text-gray-600">Book courts in seconds</p>
+            {/* Sports Icons/Imagery */}
+            <div className="grid grid-cols-3 gap-6 mt-8 opacity-80">
+              <div className="text-center">
+                <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center mb-2 mx-auto">
+                  🏀
+                </div>
+                <p className="text-sm">Basketball</p>
+              </div>
+              <div className="text-center">
+                <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center mb-2 mx-auto">
+                  🎾
+                </div>
+                <p className="text-sm">Tennis</p>
+              </div>
+              <div className="text-center">
+                <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center mb-2 mx-auto">
+                  🏸
+                </div>
+                <p className="text-sm">Badminton</p>
+              </div>
             </div>
-            <div className="bg-white p-4 rounded-lg shadow-sm">
-              <div className="text-blue-600 mb-2">🏆</div>
-              <h4 className="font-medium text-gray-900">Premium Venues</h4>
-              <p className="text-sm text-gray-600">Top-rated sports facilities</p>
+
+            <div className="mt-12 text-center">
+              <p className="text-blue-100 text-sm">Join thousands of sports enthusiasts and facility owners</p>
             </div>
-            <div className="bg-white p-4 rounded-lg shadow-sm">
-              <div className="text-blue-600 mb-2">💳</div>
-              <h4 className="font-medium text-gray-900">Secure Payments</h4>
-              <p className="text-sm text-gray-600">Safe and easy transactions</p>
+          </div>
+
+          {/* Background Pattern */}
+          <div className="absolute inset-0 opacity-10">
+            <div className="absolute top-20 left-20 w-32 h-32 border border-white rounded-full" />
+            <div className="absolute bottom-20 right-20 w-24 h-24 border border-white rounded-full" />
+            <div className="absolute top-1/2 left-10 w-16 h-16 border border-white rounded-full" />
+          </div>
+        </div>
+
+        {/* Right Panel - Auth Forms */}
+        <div className="flex-1 lg:w-3/5 flex items-center justify-center p-8 bg-gray-50">
+          <div className="w-full max-w-md">
+            {/* Mobile Logo */}
+            <div className="lg:hidden text-center mb-8">
+              <h1 className="text-3xl font-bold text-blue-600 mb-2">QuickCourt</h1>
+              <p className="text-gray-600">Book Sports Venues Instantly</p>
+            </div>
+
+            <Card className="shadow-xl border-0">
+              <CardContent className="p-8">
+                <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+                  <TabsList className="grid w-full grid-cols-2 mb-8">
+                    <TabsTrigger value="signin" className="text-sm font-medium">
+                      Sign In
+                    </TabsTrigger>
+                    <TabsTrigger value="signup" className="text-sm font-medium">
+                      Create Account
+                    </TabsTrigger>
+                  </TabsList>
+
+                  {/* Sign In Tab */}
+                  <TabsContent value="signin" className="space-y-6">
+                    <div className="text-center mb-6">
+                      <h2 className="text-2xl font-bold text-gray-900">Welcome back</h2>
+                      <p className="text-gray-600 mt-2">Sign in to your account to continue</p>
+                    </div>
+
+                    <form onSubmit={handleSignIn} className="space-y-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="signin-email">Email Address</Label>
+                        <div className="relative">
+                          <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                          <Input
+                            id="signin-email"
+                            type="email"
+                            placeholder="Enter your email"
+                            className={`pl-10 ${errors.email ? "border-red-500" : ""}`}
+                            value={formData.email}
+                            onChange={(e) => handleInputChange("email", e.target.value)}
+                            required
+                          />
+                          {errors.email && (
+                            <div className="flex items-center gap-1 mt-1 text-red-500 text-sm">
+                              <XCircle className="h-3 w-3" />
+                              {errors.email}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="signin-password">Password</Label>
+                        <div className="relative">
+                          <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                          <Input
+                            id="signin-password"
+                            type={showPassword ? "text" : "password"}
+                            placeholder="Enter your password"
+                            className="pl-10 pr-10"
+                            value={formData.password}
+                            onChange={(e) => handleInputChange("password", e.target.value)}
+                            required
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowPassword(!showPassword)}
+                            className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                          >
+                            {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between">
+                        <label className="flex items-center space-x-2">
+                          <input
+                            type="checkbox"
+                            className="rounded border-gray-300"
+                            checked={formData.rememberMe}
+                            onChange={(e) => handleInputChange("rememberMe", e.target.checked)}
+                          />
+                          <span className="text-sm text-gray-600">Remember me</span>
+                        </label>
+                        <Button variant="link" className="p-0 text-sm text-blue-600 hover:text-blue-700">
+                          Forgot Password?
+                        </Button>
+                      </div>
+
+                      <Button
+                        type="submit"
+                        className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2.5"
+                        disabled={isLoading}
+                      >
+                        {isLoading ? "Signing in..." : "Sign In"}
+                      </Button>
+                    </form>
+                  </TabsContent>
+
+                  {/* Sign Up Tab */}
+                  <TabsContent value="signup" className="space-y-6">
+                    <div className="text-center mb-6">
+                      <h2 className="text-2xl font-bold text-gray-900">Create Account</h2>
+                      <p className="text-gray-600 mt-2">Join QuickCourt and start booking venues</p>
+                    </div>
+
+                    <form onSubmit={handleSignUp} className="space-y-4">
+                      {/* Avatar Upload */}
+                      <div className="flex justify-center mb-6">
+                        <div className="relative">
+                          <Avatar className="w-20 h-20">
+                            <AvatarImage src={avatarPreview || ""} />
+                            <AvatarFallback className="bg-gray-100">
+                              <User className="h-8 w-8 text-gray-400" />
+                            </AvatarFallback>
+                          </Avatar>
+                          <label
+                            htmlFor="avatar-upload"
+                            className="absolute -bottom-1 -right-1 bg-blue-600 hover:bg-blue-700 text-white rounded-full p-2 cursor-pointer transition-colors"
+                          >
+                            <Camera className="h-3 w-3" />
+                            <input
+                              id="avatar-upload"
+                              type="file"
+                              accept="image/*"
+                              className="hidden"
+                              onChange={handleAvatarUpload}
+                            />
+                          </label>
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="fullName">Full Name</Label>
+                        <div className="relative">
+                          <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                          <Input
+                            id="fullName"
+                            type="text"
+                            placeholder="Enter your full name"
+                            className={`pl-10 ${errors.fullName ? "border-red-500" : ""}`}
+                            value={formData.fullName}
+                            onChange={(e) => handleInputChange("fullName", e.target.value)}
+                            required
+                          />
+                          {errors.fullName && (
+                            <div className="flex items-center gap-1 mt-1 text-red-500 text-sm">
+                              <XCircle className="h-3 w-3" />
+                              {errors.fullName}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="signup-email">Email Address</Label>
+                        <div className="relative">
+                          <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                          <Input
+                            id="signup-email"
+                            type="email"
+                            placeholder="Enter your email"
+                            className={`pl-10 ${errors.email ? "border-red-500" : ""}`}
+                            value={formData.email}
+                            onChange={(e) => handleInputChange("email", e.target.value)}
+                            required
+                          />
+                          {formData.email && !errors.email && (
+                            <CheckCircle className="absolute right-3 top-1/2 transform -translate-y-1/2 text-green-500 h-4 w-4" />
+                          )}
+                          {errors.email && (
+                            <div className="flex items-center gap-1 mt-1 text-red-500 text-sm">
+                              <XCircle className="h-3 w-3" />
+                              {errors.email}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="signup-password">Password</Label>
+                        <div className="relative">
+                          <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                          <Input
+                            id="signup-password"
+                            type={showPassword ? "text" : "password"}
+                            placeholder="Create a strong password"
+                            className="pl-10 pr-10"
+                            value={formData.password}
+                            onChange={(e) => handleInputChange("password", e.target.value)}
+                            required
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowPassword(!showPassword)}
+                            className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                          >
+                            {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                          </button>
+                        </div>
+                        {formData.password && (
+                          <div className="space-y-2">
+                            <div className="flex items-center gap-2">
+                              <div className="flex-1 bg-gray-200 rounded-full h-2">
+                                <div
+                                  className={`h-2 rounded-full transition-all duration-300 ${getPasswordStrengthColor()}`}
+                                  style={{ width: `${passwordStrength}%` }}
+                                />
+                              </div>
+                              <span className="text-xs text-gray-600">{getPasswordStrengthText()}</span>
+                            </div>
+                            {errors.password && (
+                              <div className="flex items-center gap-1 text-red-500 text-sm">
+                                <AlertCircle className="h-3 w-3" />
+                                {errors.password}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="role">Role</Label>
+                        <Select value={formData.role} onValueChange={(value) => handleInputChange("role", value)}>
+                          <SelectTrigger className={errors.role ? "border-red-500" : ""}>
+                            <SelectValue placeholder="Select your role" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="sports-enthusiast">Sports Enthusiast</SelectItem>
+                            <SelectItem value="facility-owner">Facility Owner</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        {errors.role && (
+                          <div className="flex items-center gap-1 text-red-500 text-sm">
+                            <XCircle className="h-3 w-3" />
+                            {errors.role}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="space-y-4">
+                        <label className="flex items-start space-x-2">
+                          <input
+                            type="checkbox"
+                            className="rounded border-gray-300 mt-1"
+                            checked={formData.agreeToTerms}
+                            onChange={(e) => handleInputChange("agreeToTerms", e.target.checked)}
+                          />
+                          <span className="text-sm text-gray-600">
+                            I agree to the{" "}
+                            <Button variant="link" className="p-0 h-auto text-blue-600 hover:text-blue-700">
+                              Terms of Service
+                            </Button>{" "}
+                            and{" "}
+                            <Button variant="link" className="p-0 h-auto text-blue-600 hover:text-blue-700">
+                              Privacy Policy
+                            </Button>
+                          </span>
+                        </label>
+                        {errors.agreeToTerms && (
+                          <div className="flex items-center gap-1 text-red-500 text-sm">
+                            <XCircle className="h-3 w-3" />
+                            {errors.agreeToTerms}
+                          </div>
+                        )}
+                      </div>
+
+                      <Button
+                        type="submit"
+                        className="w-full bg-green-600 hover:bg-green-700 text-white py-2.5"
+                        disabled={isLoading}
+                      >
+                        {isLoading ? "Creating Account..." : "Create Account"}
+                      </Button>
+                    </form>
+                  </TabsContent>
+                </Tabs>
+              </CardContent>
+            </Card>
+
+            {/* Footer */}
+            <div className="text-center mt-8 text-sm text-gray-600">
+              <p>
+                {activeTab === "signin" ? "Don't have an account? " : "Already have an account? "}
+                <Button
+                  variant="link"
+                  className="p-0 h-auto text-blue-600 hover:text-blue-700 font-medium"
+                  onClick={() => setActiveTab(activeTab === "signin" ? "signup" : "signin")}
+                >
+                  {activeTab === "signin" ? "Create one here" : "Sign in here"}
+                </Button>
+              </p>
             </div>
           </div>
         </div>
       </div>
 
       {/* OTP Verification Modal */}
-      <OtpVerificationModal
-        isOpen={showOtpModal}
-        onClose={() => setShowOtpModal(false)}
-        onVerified={handleOtpVerified}
-        email={pendingUserData?.email || ""}
+      <OTPVerificationModal
+        isOpen={showOTPModal}
+        onClose={() => setShowOTPModal(false)}
+        email={pendingEmail}
+        onVerificationSuccess={handleOTPVerificationSuccess}
+        onEditEmail={handleEditEmail}
       />
-
-      {/* Role Selection Modal */}
-      <RoleSelectionModal
-        isOpen={showRoleModal}
-        onClose={() => setShowRoleModal(false)}
-        onRoleSelected={handleRoleSelected}
-      />
-    </div>
+    </>
   )
 }

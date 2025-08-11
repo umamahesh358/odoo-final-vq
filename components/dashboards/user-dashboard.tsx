@@ -1,11 +1,12 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Calendar, MapPin, Star, TrendingUp, Clock, Users, Search } from "lucide-react"
+import { Calendar, MapPin, Star, TrendingUp, Clock, Users } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { useAuth } from "@/contexts/auth-context"
+import { supabase } from "@/lib/supabase-client"
 import { useRouter } from "next/navigation"
 
 interface DashboardStats {
@@ -37,9 +38,9 @@ export function UserDashboard() {
   const { user, profile } = useAuth()
   const router = useRouter()
   const [stats, setStats] = useState<DashboardStats>({
-    upcomingBookings: 2,
-    monthlyBookings: 5,
-    savedVenues: 3,
+    upcomingBookings: 0,
+    monthlyBookings: 0,
+    savedVenues: 0,
   })
   const [recentBookings, setRecentBookings] = useState<RecentBooking[]>([])
   const [recommendedVenues, setRecommendedVenues] = useState<RecommendedVenue[]>([])
@@ -53,75 +54,51 @@ export function UserDashboard() {
 
   const fetchDashboardData = async () => {
     try {
-      // Mock recent bookings data
-      setRecentBookings([
-        {
-          id: "1",
-          venue_name: "SportZone Arena",
-          booking_date: "2024-01-15",
-          status: "confirmed",
-          sport: "Basketball",
-          time_slots: ["10:00 AM", "11:00 AM"],
-        },
-        {
-          id: "2",
-          venue_name: "Elite Sports Complex",
-          booking_date: "2024-01-18",
-          status: "pending",
-          sport: "Tennis",
-          time_slots: ["2:00 PM"],
-        },
-        {
-          id: "3",
-          venue_name: "Victory Courts",
-          booking_date: "2024-01-20",
-          status: "confirmed",
-          sport: "Badminton",
-          time_slots: ["6:00 PM"],
-        },
-      ])
+      // Fetch user stats
+      const today = new Date()
+      const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1)
 
-      // Mock recommended venues data
-      setRecommendedVenues([
-        {
-          id: "1",
-          name: "SportZone Arena",
-          location: "Koramangala, Bangalore",
-          rating: 4.5,
-          price_per_hour: 200,
-          image_url: "/indoor-basketball-court.png",
-          sports: ["Basketball", "Tennis"],
-        },
-        {
-          id: "2",
-          name: "PlayCourt Central",
-          location: "Bandra, Mumbai",
-          rating: 4.2,
-          price_per_hour: 500,
-          image_url: "/outdoor-tennis-courts.png",
-          sports: ["Tennis", "Cricket"],
-        },
-        {
-          id: "3",
-          name: "Elite Sports Complex",
-          location: "Anna Nagar, Chennai",
-          rating: 4.8,
-          price_per_hour: 350,
-          image_url: "/modern-sports-complex.png",
-          sports: ["Swimming", "Basketball"],
-        },
-        {
-          id: "4",
-          name: "Victory Courts",
-          location: "Hitech City, Hyderabad",
-          rating: 4.3,
-          price_per_hour: 180,
-          image_url: "/indoor-badminton-court.png",
-          sports: ["Badminton", "Table Tennis"],
-        },
-      ])
+      // Get bookings data
+      const { data: bookings } = await supabase
+        .from("bookings")
+        .select("*, venues(name)")
+        .eq("user_id", user?.id)
+        .order("created_at", { ascending: false })
+
+      if (bookings) {
+        const upcoming = bookings.filter((b) => new Date(b.booking_date) >= today && b.status !== "cancelled")
+        const thisMonth = bookings.filter((b) => new Date(b.created_at) >= firstDayOfMonth)
+
+        setStats({
+          upcomingBookings: upcoming.length,
+          monthlyBookings: thisMonth.length,
+          savedVenues: 3, // Mock data - would come from favorites table
+        })
+
+        // Set recent bookings
+        const recent = bookings.slice(0, 3).map((booking) => ({
+          id: booking.id,
+          venue_name: booking.venues?.name || "Unknown Venue",
+          booking_date: booking.booking_date,
+          status: booking.status,
+          sport: booking.sport,
+          time_slots: booking.time_slots,
+        }))
+        setRecentBookings(recent)
+      }
+
+      // Fetch recommended venues
+      const { data: venues } = await supabase.from("venues").select("*").order("rating", { ascending: false }).limit(4)
+
+      if (venues) {
+        setRecommendedVenues(venues)
+      }
     } catch (error) {
       console.error("Error fetching dashboard data:", error)
+      // Set mock data on error
+      setStats({ upcomingBookings: 2, monthlyBookings: 5, savedVenues: 3 })
+      setRecentBookings([])
+      setRecommendedVenues([])
     } finally {
       setLoading(false)
     }
@@ -213,19 +190,19 @@ export function UserDashboard() {
       </div>
 
       {/* Find & Book CTA */}
-      <Card className="mb-8 bg-gradient-to-r from-blue-600 to-blue-700 text-white">
+      <Card className="mb-8 bg-gradient-to-r from-blue-600 to-green-600 text-white">
         <CardContent className="p-8 text-center">
           <h2 className="text-2xl font-bold mb-4">Find & Book Courts</h2>
           <p className="text-blue-100 mb-6">Discover amazing sports venues near you and book instantly</p>
           <Button size="lg" className="bg-white text-blue-600 hover:bg-gray-100" onClick={() => router.push("/")}>
-            <Search className="h-5 w-5 mr-2" />
-            Find Courts
+            <MapPin className="h-5 w-5 mr-2" />
+            Explore Venues
           </Button>
         </CardContent>
       </Card>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* My Recent Bookings */}
+        {/* Recent Bookings */}
         <div>
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-xl font-bold text-gray-900">My Recent Bookings</h2>
@@ -267,7 +244,7 @@ export function UserDashboard() {
                 <CardContent className="p-8 text-center">
                   <Calendar className="h-12 w-12 text-gray-400 mx-auto mb-4" />
                   <p className="text-gray-500">No recent bookings</p>
-                  <Button className="mt-4 bg-blue-600 hover:bg-blue-700" onClick={() => router.push("/")}>
+                  <Button className="mt-4" onClick={() => router.push("/")}>
                     Book Your First Venue
                   </Button>
                 </CardContent>
